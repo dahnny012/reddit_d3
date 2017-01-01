@@ -1,4 +1,3 @@
-
 var COMMENT_REGEX = 't'
 var MORE_REGEX = 'more'
 
@@ -43,7 +42,7 @@ function bootstrap(){
 }
 
 function get_reddit_data() {
-  $.get('https://www.reddit.com/r/leagueoflegends/comments/5l724n/zven_on_twitter_adc_is_so_fucking_useless/.json').
+  $.get('reddit.json').
   then(function(data, status){
     thread = new Thread(data);
     document.dispatchEvent(reddit_loaded);
@@ -61,8 +60,6 @@ function build_d3(){
       return number_to_pix(number * coeff)
     }
   }
-
-
   d3.select("body")
   .data(reply_count)
   .enter()
