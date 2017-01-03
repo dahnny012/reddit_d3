@@ -63,7 +63,8 @@ function get_reddit_data() {
 
 function build_d3(){
   console.log("building d3")
-  graph = new RedditGraph()
+  graph = new RedditGraph();
+  graph.upvotes_vs_replies_scatterplot();
 }
 
 function reflect_data(d){
@@ -76,7 +77,6 @@ function rgb (r,g,b){
 
 function RedditGraph(){
   this.create_svg()
-  this.upvotes_vs_replies_scatterplot();
 }
 
 RedditGraph.prototype.create_svg = function(){
@@ -170,22 +170,42 @@ RedditGraph.prototype.upvotes_vs_replies_scatterplot = function(){
   })
   var upvote_downscale = 9;
   var radius = 5;
+  var padding = 50;
+  var max_upvote = d3.max(upvotes, reflect_data);
+  var max_replies = d3.max(reply_count, reflect_data);
+
+  var y_scale = d3.scaleLinear()
+                        .domain([0, max_upvote])
+                        .range([this.h - padding, padding]);
+  
+  var x_scale = d3.scaleLinear()
+                        .domain([0, max_replies])
+                        .range([padding, this.w - padding]);
+
+  var r_scale = d3.scaleLinear()
+                  .domain([0, max_upvote])
+                  .range([5, 50])
+
   circles = this.svg.selectAll('circle')
                     .data(dataset)
                     .enter()
                     .append('circle');
-                    
-  circles.attr('cx', function(d){ return d[0] * 100 + radius ; })
-         .attr('cy', function(d){ return this.h - d[1] / upvote_downscale - radius;}.bind(this))
-         .attr('r', function(d){  return Math.sqrt(d[1] / upvote_downscale); });
+
+  var radius_fun = function(d) { return r_scale(d[1]); };
+
+  circles.attr('cx', function(d){ return x_scale(d[0]); })
+         .attr('cy', function(d){ return y_scale(d[1]);}.bind(this))
+         .attr('r', radius_fun);
 
   this.svg.selectAll("text")
    .data(dataset)
    .enter()
    .append("text")
-   .text(function(d){ return d[0] + "," + d[1]; })
+   .text(function(d){ return "(" + d[0] + ", " + d[1] + ")"; })
    .attr('fill', 'red')
-   .attr('x', function(d){  return d[0] * 100 + radius;  })
-   .attr('y', function(d, i){ return this.h - d[1] / upvote_downscale - radius;}.bind(this))
+   .attr('font-size', '11px')
+   .attr('font-family' , 'sans-serif')
+   .attr('x', function(d){  return x_scale(d[0]);  })
+   .attr('y', function(d, i){ return y_scale(d[1]);}.bind(this))
   
 };
