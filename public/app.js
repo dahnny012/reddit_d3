@@ -6,7 +6,7 @@ var FUZZY_GREY = '#eef3f8'
 // a convenience wrapper
 function Thread(data){
   this.comments = data[1].data.children.map(function(e){
-    return new Comment(e)
+    return new (build_strategy(e.kind))(e)
   })
 }
 
@@ -15,23 +15,33 @@ function More(){
   // get request and stream
 }
 
+
 function Comment(raw){
   this.comment = raw.data
+  this.upvotes = this.comment.ups
   this.body = this.comment.body
   if(this.comment.replies !== "" && this.comment.replies !== undefined){
     this.replies = this.comment.replies.data.children.map(function(e){
-      return new build_strategy(e.kind)
+    return new (build_strategy(e.kind))(e)
     })
   }else{
     this.replies = null
   }
+}
 
-  function build_strategy(type){
-    if(type.includes(COMMENT_REGEX))
-      return Comment
-    if(type.includes(MORE_REGEX))
-      return More
-  }
+Comment.prototype.is_comment = is_comment;
+Comment.prototype.is_more = is_more;
+More.prototype.is_comment = is_comment;
+More.prototype.is_more = is_more;
+
+function is_comment(){ return Comment.prototype.isPrototypeOf(self) }
+function is_more(){ return More.prototype.isPrototypeOf(self) }
+
+function build_strategy(type){
+  if(type.includes(COMMENT_REGEX))
+    return Comment
+  if(type.includes(MORE_REGEX))
+    return More
 }
 
 var thread;
@@ -66,11 +76,11 @@ function rgb (r,g,b){
 
 function RedditGraph(){
   this.create_svg()
-  this.reply_count_as_bar_chart()
+  this.upvotes_vs_replies_scatterplot();
 }
 
 RedditGraph.prototype.create_svg = function(){
-  this.h = 150;
+  this.h = 300;
   this.w  = 800;
   this.svg = d3.select('body')
               .append('svg')
@@ -88,12 +98,12 @@ RedditGraph.prototype.y_spacing = function(dataset){
 
 RedditGraph.prototype.reply_count_as_circles = function(){
   var dataset = this.reply_count().map(function(e){ return e * 2});
-  var spacing = this.w / dataset.length
+  var spacing = this.w / dataset.length;
 
   circles = this.svg.selectAll('circle')
                 .data(dataset)
                 .enter()
-                .append('circle')
+                .append('circle');
   
   circles.attr('cx', function(d, i){
     return i * spacing + spacing;
@@ -103,22 +113,16 @@ RedditGraph.prototype.reply_count_as_circles = function(){
   .attr('fill', STEEL_BLUE)
   .attr('stroke', FUZZY_GREY)
   .attr('stroke-width', function(d){
-    return d/4
-  })
-}
+    return d/4;
+  });
+};
 
 // Gets the number of replies of each comment on the first level
 // as a function its sort of inefficient but w/e
 RedditGraph.prototype.reply_count = function(){
-  var first_level_comments = thread.comments;
-  var reply_count = first_level_comments.map(function(e){ if(e.replies) { return e.replies.length } else return 0 })
+  var reply_count = thread.comments.map(function(e){ if(e.replies) { return e.replies.length } else return 0 })
   return reply_count;
-}
-
-RedditGraph.prototype.comments = function(){
-  var comments = thread.comments.map(function(e){ return e.body })
-  return comments
-}
+};
 
 RedditGraph.prototype.reply_count_as_bar_chart = function(){
   var scale_number = function(coeff){
@@ -127,10 +131,9 @@ RedditGraph.prototype.reply_count_as_bar_chart = function(){
     }
   }
   var reply_count = this.reply_count() 
-  //var comments = this.comments()
   var spacing = this.x_spacing(reply_count)
-  var bar_padding = 1
-  var scale = 18
+  var bar_padding = 1;
+  var scale = 18;
   this.svg.selectAll('rect')
      .data(this.reply_count())
      .enter()
@@ -151,13 +154,38 @@ RedditGraph.prototype.reply_count_as_bar_chart = function(){
       .attr('fill', 'black')
       .attr('font-size', '11px')
       .attr('font-family', 'sans-serif')
-      .attr('text-anchor', 'middle')
+      .attr('text-anchor', 'middle');
+};
 
-/*
-  d3.select("body")
-  .data(this.reply_count())
-  .enter()
-  .append("div")
-  .attr("class", "bar")
-  .style('height', adjusted_number_to_pix(5))*/
-}
+RedditGraph.prototype.upvotes = function(){
+  var ups = thread.comments.map(function(e){  if(e.upvotes) return e.upvotes; else return 0; })
+  return ups;
+};
+
+RedditGraph.prototype.upvotes_vs_replies_scatterplot = function(){
+  var reply_count =  this.reply_count()
+  var upvotes = this.upvotes()
+  dataset = reply_count.map(function(e, i){
+    return [e,upvotes[i]];
+  })
+  var upvote_downscale = 9;
+  var radius = 5;
+  circles = this.svg.selectAll('circle')
+                    .data(dataset)
+                    .enter()
+                    .append('circle');
+                    
+  circles.attr('cx', function(d){ return d[0] * 100 + radius ; })
+         .attr('cy', function(d){ return this.h - d[1] / upvote_downscale - radius;}.bind(this))
+         .attr('r', function(d){  return Math.sqrt(d[1] / upvote_downscale); });
+
+  this.svg.selectAll("text")
+   .data(dataset)
+   .enter()
+   .append("text")
+   .text(function(d){ return d[0] + "," + d[1]; })
+   .attr('fill', 'red')
+   .attr('x', function(d){  return d[0] * 100 + radius;  })
+   .attr('y', function(d, i){ return this.h - d[1] / upvote_downscale - radius;}.bind(this))
+  
+};
