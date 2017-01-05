@@ -2,12 +2,17 @@ var COMMENT_REGEX = 't'
 var MORE_REGEX = 'more'
 var STEEL_BLUE = '#4682b4'
 var FUZZY_GREY = '#eef3f8'
+var X_PADDING = 10;
 
 // a convenience wrapper
 function Thread(data) {
-  this.comments = data[1].data.children.map(function (e) {
+  this.thread = data[0].data.children[0].data
+  this.id = this.thread.id
+  this.title = this.thread.title
+  this.selftext = this.thread.selftext
+  this.replies = data[1].data.children.map(function (e) {
     return new (build_strategy(e.kind))(e)
-  })
+  });
 }
 
 // Edge case ill deal with later
@@ -49,8 +54,8 @@ var reddit_loaded = new CustomEvent('reddit_data');
 $(document).ready(bootstrap)
 
 function bootstrap() {
-  document.addEventListener('reddit_data', build_d3)
-  get_reddit_data()
+  document.addEventListener('reddit_data', build_d3);
+  get_reddit_data();
 }
 
 function get_reddit_data() {
@@ -64,7 +69,6 @@ function get_reddit_data() {
 function build_d3() {
   console.log("building d3")
   graph = new RedditGraph();
-  graph.upvotes_vs_replies_scatterplot();
 }
 
 function reflect_data(d) {
@@ -76,12 +80,105 @@ function rgb(r, g, b) {
 }
 
 function RedditGraph() {
-  this.create_svg()
+  this.create_svg();
+  this.create_tree();
+  this.update_root();
 }
 
+RedditGraph.prototype.create_tree = function(){
+  this.hierarchy =   d3.hierarchy(thread, function(d){ return d.replies; })
+  this.tree = d3.tree();
+  this.nodes = this.tree(this.hierarchy);
+}
+
+RedditGraph.prototype.update_root = function(){
+  root = this.svg.selectAll('rect.root')
+  .data([this.nodes.data])
+  .enter()
+  .append('rect')
+  .attr('y', this.h / 2)
+  .attr('x', 0)
+  .attr('fill', STEEL_BLUE)
+  .attr('width', this.w / 4)
+  .attr('height', this.h / 6)
+
+  this.svg.append('text')
+        .text(thread.title)
+        .attr('y', this.h/2 + this.h/12 )
+        .attr('x', 0)
+
+  this.update_children(this.nodes)
+}
+
+RedditGraph.prototype.update_children = function(parent, i){
+
+  var position_chart = {};
+
+  for(i=0; i <= this.nodes.height; i++){
+    position_chart[i] = 0;
+  }
+
+  this.svg.selectAll('rect.children')
+  .data(parent.descendants().splice(1))
+  .enter()
+  .append('rect')
+  .attr('y', function(d){  
+    var depth = d.depth;
+    var i = position_chart[depth]++;
+    return i * 30;
+  })
+  .attr('x', function(d) { return this.w /4 + 10 + d.depth * 20; }.bind(this))
+  .attr('fill', STEEL_BLUE)
+  .attr('id', function(d){ return d.id;})
+  .attr('width', 10)
+  .attr('height', 10 )
+}
+
+
+RedditGraph.prototype.create_root_node = function(){
+  root = this.svg.selectAll('rect')
+          .data([thread])
+          .enter()
+          .append('rect')
+          .attr('class', 'root')
+          .attr('y', this.h/2)
+          .attr('x', 0)
+          .attr('fill', STEEL_BLUE)
+          .attr('width', this.w / 4)
+          .attr('height', this.h / 6)
+          .attr('id', thread.id)
+
+  this.svg.append('text')
+          .text(thread.title)
+          .attr('y', this.h/2 + this.h/12 )
+          .attr('x', 0)
+
+  this.render_children(root)
+};
+
+RedditGraph.prototype.render_children = function(root){
+  comments = root.datum().comments
+  debugger
+  comment_nodes = this.svg.selectAll('rect')
+  .data(comments)
+  .enter()
+  .append('rect')
+  .attr('y', function(d, i){
+    return i * 30
+  })
+  .attr('x', parseInt(root.attr('width')) + X_PADDING)
+  .attr('fill', STEEL_BLUE)
+  .attr('width', 10)
+  .attr('id', function(d){ return d.id })
+  .attr('height', 10)
+
+  var single_node = comment_nodes
+  this.render_children(single_node)
+};
+
 RedditGraph.prototype.create_svg = function () {
-  this.h = 300;
-  this.w = 800;
+  this.h = 720;
+  this.w = 1360;
   this.svg = d3.select('body')
     .append('svg')
     .attr('width', this.w)
