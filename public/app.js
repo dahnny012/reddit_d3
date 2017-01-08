@@ -198,10 +198,8 @@ RedditGraph.prototype.update_children = function(parent, i){
   })
   .text(function(d){ return d.line })
 
-
-  // Size ReAdjusment
-
-
+  // Draw lines
+  
 }
 
 RedditGraph.prototype.x_spacing = function (dataset) {
