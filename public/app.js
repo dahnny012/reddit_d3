@@ -3,6 +3,8 @@ var MORE_REGEX = 'more'
 var STEEL_BLUE = '#4682b4'
 var FUZZY_GREY = '#eef3f8'
 var X_PADDING = 10;
+var NODE_WIDTH = 400
+var NODE_HEIGHT = 400
 
 // a convenience wrapper
 function Thread(data) {
@@ -82,18 +84,51 @@ function rgb(r, g, b) {
 function RedditGraph() {
   this.create_svg();
   this.create_tree();
+  this.scale_tree();
   this.update_root();
+}
+
+RedditGraph.prototype.create_svg = function () {
+  // Initial heights and width used for node size calulations
+  // The graph will scale this depending on height and node with most children
+  this.h = 720;
+  this.w = 1360;
+  this.svg = d3.select('body')
+    .append('svg')
+    .attr('width', this.w)
+    .attr('height', this.h);
 }
 
 RedditGraph.prototype.create_tree = function(){
   this.hierarchy =   d3.hierarchy(thread, function(d){ return d.replies; })
   this.tree = d3.tree();
-  this.nodes = this.tree(this.hierarchy);
+  this.root = this.tree(this.hierarchy);
+}
+
+
+RedditGraph.prototype.scale_tree = function(){
+  var max_children_per_level = {};
+  var max_children = 0
+
+  this.root.each(function(a){
+    if(a.children){
+      value_at_depth = max_children_per_level[a.depth]
+      if(value_at_depth === undefined)
+        max_children_per_level[a.depth] = a.children.length
+      else
+         max_children_per_level[a.depth] = value_at_depth + a.children.length;
+      if(max_children_per_level[a.depth] > max_children)
+        max_children = max_children_per_level[a.depth]
+    }
+  })
+
+  this.svg.attr('width', this.root.height * (NODE_WIDTH + X_PADDING) + this.w/4)
+          .attr('height',  (max_children)  * NODE_HEIGHT)
 }
 
 RedditGraph.prototype.update_root = function(){
-  root = this.svg.selectAll('rect.root')
-  .data([this.nodes.data])
+  root = this.svg.selectAll('rect')
+  .data([this.root.data])
   .enter()
   .append('rect')
   .attr('y', this.h / 2)
@@ -107,16 +142,17 @@ RedditGraph.prototype.update_root = function(){
         .attr('y', this.h/2 + this.h/12 )
         .attr('x', 0)
 
-  this.update_children(this.nodes)
+  this.update_children(this.root)
 }
 
 RedditGraph.prototype.update_children = function(parent, i){
 
   var position_chart = {};
 
-  for(i=0; i <= this.nodes.height; i++){
+  for(i=0; i <= this.root.height; i++){
     position_chart[i] = 0;
   }
+
 
   this.svg.selectAll('rect.children')
   .data(parent.descendants().splice(1))
@@ -125,13 +161,13 @@ RedditGraph.prototype.update_children = function(parent, i){
   .attr('y', function(d){  
     var depth = d.depth;
     var i = position_chart[depth]++;
-    return i * 30;
+    return i * NODE_HEIGHT;
   })
-  .attr('x', function(d) { return this.w /4 + 10 + d.depth * 20; }.bind(this))
+  .attr('title', function(d){ return d.data.body })
+  .attr('x', function(d) { return d.depth * NODE_WIDTH; }.bind(this))
   .attr('fill', STEEL_BLUE)
-  .attr('id', function(d){ return d.id;})
-  .attr('width', 10)
-  .attr('height', 10 )
+  .attr('width', NODE_WIDTH - X_PADDING)
+  .attr('height', NODE_HEIGHT - X_PADDING)
 }
 
 
@@ -158,7 +194,6 @@ RedditGraph.prototype.create_root_node = function(){
 
 RedditGraph.prototype.render_children = function(root){
   comments = root.datum().comments
-  debugger
   comment_nodes = this.svg.selectAll('rect')
   .data(comments)
   .enter()
@@ -175,15 +210,6 @@ RedditGraph.prototype.render_children = function(root){
   var single_node = comment_nodes
   this.render_children(single_node)
 };
-
-RedditGraph.prototype.create_svg = function () {
-  this.h = 720;
-  this.w = 1360;
-  this.svg = d3.select('body')
-    .append('svg')
-    .attr('width', this.w)
-    .attr('height', this.h);
-}
 
 RedditGraph.prototype.x_spacing = function (dataset) {
   return this.w / dataset.length;
