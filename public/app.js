@@ -2,15 +2,15 @@ var COMMENT_REGEX = 't'
 var MORE_REGEX = 'more'
 var STEEL_BLUE = '#4682b4'
 var FUZZY_GREY = '#eef3f8'
-var X_PADDING = 10;
-var NODE_WIDTH = 400
-var NODE_HEIGHT = 400
+var PADDING = 10;
+var NODE_WIDTH = 400;
+var NODE_HEIGHT = 200;
+var MAX_LINES_FOR_HEIGHT = 9;
 
-// a convenience wrapper
 function Thread(data) {
   this.thread = data[0].data.children[0].data
   this.id = this.thread.id
-  this.title = this.thread.title
+  this.body = this.thread.title
   this.selftext = this.thread.selftext
   this.replies = data[1].data.children.map(function (e) {
     return new (build_strategy(e.kind))(e)
@@ -122,7 +122,7 @@ RedditGraph.prototype.scale_tree = function(){
     }
   })
 
-  this.svg.attr('width', this.root.height * (NODE_WIDTH + X_PADDING) + this.w/4)
+  this.svg.attr('width', this.root.height * (NODE_WIDTH + PADDING) + this.w/4)
           .attr('height',  (max_children)  * NODE_HEIGHT)
 }
 
@@ -131,18 +131,13 @@ RedditGraph.prototype.update_root = function(){
   .data([this.root.data])
   .enter()
   .append('rect')
-  .attr('y', this.h / 2)
+  .attr('y', 0)
   .attr('x', 0)
   .attr('fill', STEEL_BLUE)
-  .attr('width', this.w / 4)
-  .attr('height', this.h / 6)
+  .attr('width', NODE_WIDTH - PADDING)
+  .attr('height', NODE_HEIGHT - PADDING)
 
-  this.svg.append('text')
-        .text(thread.title)
-        .attr('y', this.h/2 + this.h/12 )
-        .attr('x', 0)
-
-  this.update_children(this.root)
+   this.update_children(this.root)
 }
 
 RedditGraph.prototype.update_children = function(parent, i){
@@ -153,9 +148,8 @@ RedditGraph.prototype.update_children = function(parent, i){
     position_chart[i] = 0;
   }
 
-
   this.svg.selectAll('rect.children')
-  .data(parent.descendants().splice(1))
+  .data(parent.descendants().splice(1)) // Chop off the root
   .enter()
   .append('rect')
   .attr('y', function(d){  
@@ -163,53 +157,52 @@ RedditGraph.prototype.update_children = function(parent, i){
     var i = position_chart[depth]++;
     return i * NODE_HEIGHT;
   })
-  .attr('title', function(d){ return d.data.body })
   .attr('x', function(d) { return d.depth * NODE_WIDTH; }.bind(this))
   .attr('fill', STEEL_BLUE)
-  .attr('width', NODE_WIDTH - X_PADDING)
-  .attr('height', NODE_HEIGHT - X_PADDING)
-}
+  .attr('width', NODE_WIDTH - PADDING)
+  .attr('height', NODE_HEIGHT - PADDING)
 
 
-RedditGraph.prototype.create_root_node = function(){
-  root = this.svg.selectAll('rect')
-          .data([thread])
-          .enter()
-          .append('rect')
-          .attr('class', 'root')
-          .attr('y', this.h/2)
-          .attr('x', 0)
-          .attr('fill', STEEL_BLUE)
-          .attr('width', this.w / 4)
-          .attr('height', this.h / 6)
-          .attr('id', thread.id)
+  for(i=0; i <= this.root.height; i++){
+    position_chart[i] = 0;
+  }
 
-  this.svg.append('text')
-          .text(thread.title)
-          .attr('y', this.h/2 + this.h/12 )
-          .attr('x', 0)
-
-  this.render_children(root)
-};
-
-RedditGraph.prototype.render_children = function(root){
-  comments = root.datum().comments
-  comment_nodes = this.svg.selectAll('rect')
-  .data(comments)
+  this.svg.selectAll('text')
+  .data(parent.descendants())
   .enter()
-  .append('rect')
-  .attr('y', function(d, i){
-    return i * 30
+  .append('text')
+  .attr('x', function(d) { return d.depth * NODE_WIDTH + PADDING; }.bind(this))
+  .attr('y', function(d){  
+    var depth = d.depth;
+    var i = position_chart[depth]++;
+    return i * NODE_HEIGHT + PADDING * 2;
   })
-  .attr('x', parseInt(root.attr('width')) + X_PADDING)
-  .attr('fill', STEEL_BLUE)
-  .attr('width', 10)
-  .attr('id', function(d){ return d.id })
-  .attr('height', 10)
+  .selectAll("tspan")
+  .data(function(d){ 
+    lines =  d3.wordwrap(d.data.body, 45);
+    if(lines.length > MAX_LINES_FOR_HEIGHT)
+      lines = lines.slice(0,9)
+    return lines.map(function(e){ return {depth: d.depth, line: e}})
+  })
+  .enter()
+  .append('tspan')
+  .attr('fill', 'white')
+  .attr('dy', function(d, i){
+    if(i > 0)
+      return PADDING * 2;
+    else 
+      return 0;
+  })
+  .attr('x', function(d, i){
+     return d.depth * NODE_WIDTH + PADDING;
+  })
+  .text(function(d){ return d.line })
 
-  var single_node = comment_nodes
-  this.render_children(single_node)
-};
+
+  // Size ReAdjusment
+
+
+}
 
 RedditGraph.prototype.x_spacing = function (dataset) {
   return this.w / dataset.length;
