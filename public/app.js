@@ -3,6 +3,7 @@ var MORE_REGEX = 'more'
 var STEEL_BLUE = '#4682b4'
 var FUZZY_GREY = '#eef3f8'
 var PADDING = 10;
+var SPACING = 100;
 var NODE_WIDTH = 400;
 var NODE_HEIGHT = 200;
 var MAX_LINES_FOR_HEIGHT = 9;
@@ -97,6 +98,7 @@ RedditGraph.prototype.create_svg = function () {
     .append('svg')
     .attr('width', this.w)
     .attr('height', this.h);
+  this.group = this.svg.append('g')
 }
 
 RedditGraph.prototype.create_tree = function(){
@@ -104,7 +106,6 @@ RedditGraph.prototype.create_tree = function(){
   this.tree = d3.tree();
   this.root = this.tree(this.hierarchy);
 }
-
 
 RedditGraph.prototype.scale_tree = function(){
   var max_children_per_level = {};
@@ -127,16 +128,6 @@ RedditGraph.prototype.scale_tree = function(){
 }
 
 RedditGraph.prototype.update_root = function(){
-  root = this.svg.selectAll('rect')
-  .data([this.root.data])
-  .enter()
-  .append('rect')
-  .attr('y', 0)
-  .attr('x', 0)
-  .attr('fill', STEEL_BLUE)
-  .attr('width', NODE_WIDTH - PADDING)
-  .attr('height', NODE_HEIGHT - PADDING)
-
    this.update_children(this.root)
 }
 
@@ -148,41 +139,37 @@ RedditGraph.prototype.update_children = function(parent, i){
     position_chart[i] = 0;
   }
 
-  this.svg.selectAll('rect.children')
-  .data(parent.descendants().splice(1)) // Chop off the root
+  this.group
+  .selectAll('rect')
+  .data(parent.descendants())
   .enter()
+  .append('g')
   .append('rect')
   .attr('y', function(d){  
     var depth = d.depth;
     var i = position_chart[depth]++;
-    return i * NODE_HEIGHT;
+    d.y = i * NODE_HEIGHT
+    return d.y;
   })
-  .attr('x', function(d) { return d.depth * NODE_WIDTH; }.bind(this))
+  .attr('x', function(d) { 
+    d.x = d.depth * NODE_WIDTH + d.depth * SPACING
+    return d.x; 
+  }.bind(this))
   .attr('fill', STEEL_BLUE)
   .attr('width', NODE_WIDTH - PADDING)
   .attr('height', NODE_HEIGHT - PADDING)
 
-
-  for(i=0; i <= this.root.height; i++){
-    position_chart[i] = 0;
-  }
-
-  this.svg.selectAll('text')
-  .data(parent.descendants())
-  .enter()
+  this.group.selectAll('g')
   .append('text')
-  .attr('x', function(d) { return d.depth * NODE_WIDTH + PADDING; }.bind(this))
   .attr('y', function(d){  
-    var depth = d.depth;
-    var i = position_chart[depth]++;
-    return i * NODE_HEIGHT + PADDING * 2;
+    return d.y + PADDING * 2
   })
   .selectAll("tspan")
   .data(function(d){ 
     lines =  d3.wordwrap(d.data.body, 45);
     if(lines.length > MAX_LINES_FOR_HEIGHT)
       lines = lines.slice(0,9)
-    return lines.map(function(e){ return {depth: d.depth, line: e}})
+    return lines.map(function(e){ return {depth: d.depth, x: d.x, line: e}})
   })
   .enter()
   .append('tspan')
@@ -194,12 +181,26 @@ RedditGraph.prototype.update_children = function(parent, i){
       return 0;
   })
   .attr('x', function(d, i){
-     return d.depth * NODE_WIDTH + PADDING;
+    var position = d.x + PADDING;
+    return position;
   })
   .text(function(d){ return d.line })
 
-  // Draw lines
-  
+  this.group.selectAll('g')
+  .append('path')
+  .each(function(d, i){
+    if(d.parent){
+      d3.select(this).data([d])
+      .attr('d', function(d){
+        var line = d3.line()
+        return line([[d.x, d.y + NODE_HEIGHT/2],[d.parent.x + NODE_WIDTH - PADDING, d.parent.y + NODE_HEIGHT/2]]);
+      })
+      .attr('stroke', 'black')
+      .attr('stroke-width', '2')
+      ;
+    }
+  })
+
 }
 
 RedditGraph.prototype.x_spacing = function (dataset) {
